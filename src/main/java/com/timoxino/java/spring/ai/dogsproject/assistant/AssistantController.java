@@ -2,15 +2,22 @@ package com.timoxino.java.spring.ai.dogsproject.assistant;
 
 import com.timoxino.java.spring.ai.dogsproject.dog.DogRepository;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 @RestController
 class AssistantController {
 
+    private final Map<String, PromptChatMemoryAdvisor> memory = new ConcurrentHashMap<>();
     private final ChatClient ai;
 
     AssistantController(ChatClient.Builder ai, DogRepository repository, VectorStore vectorStore) {
@@ -27,6 +34,11 @@ class AssistantController {
 
     @GetMapping("/{user}/assistant")
     String inquire(@PathVariable String user, @RequestParam String question) {
-        return this.ai.prompt().user(question).call().content();
+        InMemoryChatMemoryRepository inMemoryChatMemoryRepository = new InMemoryChatMemoryRepository();
+        MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder().chatMemoryRepository(inMemoryChatMemoryRepository).build();
+        PromptChatMemoryAdvisor advisor = PromptChatMemoryAdvisor.builder(chatMemory).build();
+        PromptChatMemoryAdvisor advisorForUser = memory.computeIfAbsent(user, k -> advisor);
+
+        return this.ai.prompt().user(question).advisors(advisorForUser).call().content();
     }
 }
