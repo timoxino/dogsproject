@@ -4,3 +4,10 @@ spring:
   docker:
     compose:
       lifecycle-management: start_only
+  datasource:
+    username: myuser
+    password: secret
+    url: jdbc:postgresql://pgvector:5432/mydatabase
+  sql:
+    init:
+      mode: always
