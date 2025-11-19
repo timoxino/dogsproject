@@ -1,34 +1,42 @@
 package com.timoxino.java.spring.ai.dogsproject.assistant;
 
+import com.timoxino.java.spring.ai.dogsproject.dog.DogAdoptionScheduler;
 import com.timoxino.java.spring.ai.dogsproject.dog.DogRepository;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 class AssistantController {
 
-    private final Map<String, PromptChatMemoryAdvisor> memory = new ConcurrentHashMap<>();
-    private final ChatClient ai;
-
-    AssistantController(ChatClient.Builder ai, DogRepository repository, VectorStore vectorStore) {
-        var system = """
+    private final String systemPrompt = """
                 You are an AI powered assistant to help people adopt a dog from the adoption
                 agency named Pooch Palace with locations in Antwerp, Seoul, Tokyo, Singapore, Paris,
                 Mumbai, New Delhi, Barcelona, San Francisco, and London. Information about the dogs
                 available will be presented below. If there is no information, then return a polite response
                 suggesting we don't have any dogs available.
                 """;
-        this.ai = ai.defaultSystem(system).build();
+    private final Map<String, PromptChatMemoryAdvisor> memory = new ConcurrentHashMap<>();
+    private final ChatClient ai;
+
+    AssistantController(ChatClient.Builder ai, DogRepository repository, VectorStore vectorStore, DogAdoptionScheduler scheduler) {
+        repository.findAll().forEach(dog -> {
+            var document = new Document("id: %s, name: %s, description: %s".formatted(dog.id(), dog.name(), dog.description()));
+            vectorStore.add(List.of(document));
+        });
+        this.ai = ai.defaultTools(scheduler).defaultAdvisors(new QuestionAnswerAdvisor(vectorStore)).build();
     }
 
 
